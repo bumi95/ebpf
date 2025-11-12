@@ -7,5 +7,19 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 SEC("fentry/security_file_open")
 int BPF_PROG(handle_open, struct file *f)
 {
-    /* ring 버퍼로 task, 파일에 대한 정보를 담아 유저로 전송 */
+    if (is_skip_event()) {
+        return 0;
+    }
+
+    struct bpf_event *e = alloc_event();
+    if (!e) {
+        bpf_printk("event alloc failed\n");
+        return 0;
+    }
+
+    set_file_info(e, f);
+
+    submit_event(e);
+
+    return 0;
 }
