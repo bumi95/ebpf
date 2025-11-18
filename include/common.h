@@ -1,7 +1,7 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-#define SIZE    256
+#define SIZE    4096
 
 struct bpf_event {
     int pid;

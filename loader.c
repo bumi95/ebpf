@@ -6,8 +6,8 @@
 #include <sys/resource.h>
 #include <signal.h>
 #include <errno.h>
-
-#include "loader.skel.h"
+#include "common.h"
+#include "file.skel.h"
 
 int g_loop = 0;
 
@@ -45,12 +45,29 @@ bool set_signal_handler()
         return false;
     }
 
+    return true;
+}
+
+int file_handle(void *ctx, void *data, size_t data_sz)
+{
+    struct bpf_event *e = data;
+
+    printf("[EVENT]\n");
+    printf("  PID: %d\n", e->pid);
+    printf("  Command: %s\n", e->comm);
+    printf("  Task UID: 0x%x, GID: 0x%x, EUID: 0x%x, EGID: 0x%x\n", e->uid, e->gid, e->euid, e->egid);
+    printf("  Task Capabilities: Permitted: 0x%llx, Effective: 0x%llx\n", e->cap_permitted, e->cap_effective);
+    printf("  File UID: 0x%x, GID: 0x%x, EUID: 0x%x, EGID: 0x%x\n", e->f_uid, e->f_gid, e->f_euid, e->f_egid);
+    printf("  File Capabilities: Permitted: 0x%llx, Effective: 0x%llx\n", e->f_cap_permitted, e->f_cap_effective);
+    printf("  Filepath: %s\n", e->filepath);
+    printf("\n");
+
     return 0;
 }
 
 int main()
 {
-    struct loader_bpf *skel;
+    struct file_bpf *skel;
     struct ring_buffer *rb = NULL;
     int err;
 
@@ -62,7 +79,7 @@ int main()
         return -1;
     }
 
-    skel = loader_bpf__open();
+    skel = file_bpf__open();
     if (!skel) {
         fprintf(stderr, "failed to open BPF skeleton\n");
         return -1;
@@ -70,19 +87,19 @@ int main()
 
     skel->rodata->g_self_pid = getpid();
 
-    err = loader_bpf__load(skel);
+    err = file_bpf__load(skel);
     if (err) {
         fprintf(stderr, "failed to load BPF skeleton: %d\n", -err);
         goto cleanup;
     }
 
-    err = loader_bpf__attach(skel);
+    err = file_bpf__attach(skel);
     if (err) {
         fprintf(stderr, "failed to attach BPF skeleton: %d\n", -err);
         goto cleanup;
     }
 
-    rb = ring_buffer__new(bpf_map__fd(skel->maps.rb))
+    rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), file_handle, NULL, NULL);
     if (!rb) {
         err = -errno;
         fprintf(stderr, "failed to create ring buffer (%d)\n", err);
@@ -104,6 +121,6 @@ int main()
     }
 
 cleanup:
-    loader_bpf__destroy(skel);
+    file_bpf__destroy(skel);
     return -err;
 }
